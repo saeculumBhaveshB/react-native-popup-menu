@@ -21,6 +21,7 @@ import {
   LayoutAnimation,
   NativeSyntheticEvent,
   NativeScrollEvent,
+  Dimensions,
 } from 'react-native';
 import { PopupMenu } from './src/packages/react-native-custom-popup/src/components/PopupMenu';
 import { PopupInput } from './src/packages/react-native-custom-popup/src/components/PopupInput';
@@ -32,6 +33,10 @@ const TEST_ITEMS = Array.from({ length: 100 }, (_, i) => ({
   value: '',
 }));
 
+const SCREEN_HEIGHT = Dimensions.get('window').height;
+const HEADER_HEIGHT = 60; // Height of the "Popup Menu Test App" header
+const KEYBOARD_PADDING = 20;
+
 const App = () => {
   const [items, setItems] = useState(TEST_ITEMS);
   const [selectedItem, setSelectedItem] = useState<number | null>(null);
@@ -40,6 +45,7 @@ const App = () => {
   const itemRefs = useRef<{ [key: number]: ViewType }>({});
   const scrollViewRef = useRef<ScrollView>(null);
   const [scrollOffset, setScrollOffset] = useState(0);
+  const [scrollViewHeight, setScrollViewHeight] = useState(0);
   const lastMeasuredItemPosition = useRef<{
     y: number;
     height: number;
@@ -53,10 +59,14 @@ const App = () => {
     }
   }, []);
 
-  // Track scroll position
+  // Track scroll position and content size
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     setScrollOffset(event.nativeEvent.contentOffset.y);
   };
+
+  const handleScrollViewLayout = useCallback((event: any) => {
+    setScrollViewHeight(event.nativeEvent.layout.height);
+  }, []);
 
   // Function to measure and update popup position
   const updatePopupPosition = useCallback((itemId: number) => {
@@ -87,77 +97,112 @@ const App = () => {
     }
   }, []);
 
+  // Function to ensure item is visible when keyboard shows
+  const ensureItemVisible = useCallback(
+    (itemId: number, keyboardHeight: number, screenHeight: number) => {
+      const itemRef = itemRefs.current[itemId];
+      if (!itemRef || !scrollViewRef.current) return;
+
+      itemRef.measure(
+        (
+          x: number,
+          y: number,
+          width: number,
+          height: number,
+          pageX: number,
+          pageY: number,
+        ) => {
+          const itemTop = pageY;
+          const itemBottom = pageY + height;
+          const visibleAreaTop = HEADER_HEIGHT;
+          const visibleAreaBottom = screenHeight - keyboardHeight;
+          const visibleHeight = visibleAreaBottom - visibleAreaTop;
+
+          if (Platform.OS === 'ios') {
+            // iOS: Calculate the ideal position to keep the item visible
+            const idealPosition = Math.max(0, itemTop - visibleHeight / 3);
+            scrollViewRef.current?.scrollTo({
+              y: idealPosition,
+              animated: true,
+            });
+          } else {
+            // Android: Adjust scroll only if item would be hidden by keyboard
+            if (itemBottom > visibleAreaBottom) {
+              const scrollOffset =
+                itemBottom - visibleAreaBottom + KEYBOARD_PADDING;
+              scrollViewRef.current?.scrollTo({
+                y: scrollOffset,
+                animated: false,
+              });
+            }
+          }
+
+          // Update popup position after scroll
+          setTimeout(
+            () => {
+              updatePopupPosition(itemId);
+            },
+            Platform.OS === 'ios' ? 300 : 50,
+          );
+        },
+      );
+    },
+    [updatePopupPosition],
+  );
+
   // Handle keyboard events
   React.useEffect(() => {
     const keyboardWillShow = (e: KeyboardEvent) => {
       if (!selectedItem || !scrollViewRef.current) return;
 
-      // Get current scroll position
-      const currentScrollY = scrollOffset;
+      if (Platform.OS === 'ios') {
+        const keyboardHeight = e.endCoordinates.height;
+        const screenHeight = SCREEN_HEIGHT;
+        ensureItemVisible(selectedItem, keyboardHeight, screenHeight);
+      } else {
+        // Android: Store current scroll position and handle visibility
+        const currentScrollY = scrollOffset;
+        if (!lastMeasuredItemPosition.current?.originalScrollY) {
+          lastMeasuredItemPosition.current = {
+            ...lastMeasuredItemPosition.current!,
+            originalScrollY: currentScrollY,
+          };
+        }
 
-      // Store original position if not already stored
-      if (!lastMeasuredItemPosition.current?.originalScrollY) {
-        lastMeasuredItemPosition.current = {
-          ...lastMeasuredItemPosition.current!,
-          originalScrollY: currentScrollY,
-        };
-      }
-
-      const itemRef = itemRefs.current[selectedItem];
-      if (itemRef) {
-        itemRef.measure(
-          (
-            x: number,
-            y: number,
-            width: number,
-            height: number,
-            pageX: number,
-            pageY: number,
-          ) => {
-            const keyboardHeight = e.endCoordinates.height;
-            const screenHeight = e.endCoordinates.screenY - keyboardHeight;
-            const itemBottom = pageY + height;
-
-            // Calculate how much we need to scroll
-            if (itemBottom > screenHeight) {
-              const scrollOffset = itemBottom - screenHeight + 50;
-
-              // Scroll instantly
-              scrollViewRef.current?.scrollTo({
-                y: scrollOffset,
-                animated: false,
-              });
-
-              // Update positions after a small delay to ensure scroll is complete
-              setTimeout(() => {
-                updatePopupPosition(selectedItem);
-              }, 50);
-            }
-          },
-        );
+        const keyboardHeight = e.endCoordinates.height;
+        const screenHeight = e.endCoordinates.screenY;
+        ensureItemVisible(selectedItem, keyboardHeight, screenHeight);
       }
     };
 
     const keyboardWillHide = () => {
-      if (
-        !selectedItem ||
-        !scrollViewRef.current ||
-        !lastMeasuredItemPosition.current
-      )
-        return;
+      if (!selectedItem || !scrollViewRef.current) return;
 
-      const { originalScrollY } = lastMeasuredItemPosition.current;
+      if (Platform.OS === 'ios') {
+        // iOS: Restore scroll position smoothly
+        if (lastMeasuredItemPosition.current?.originalScrollY !== undefined) {
+          scrollViewRef.current.scrollTo({
+            y: lastMeasuredItemPosition.current.originalScrollY,
+            animated: true,
+          });
+        }
+      } else {
+        // Android: Restore original scroll position
+        if (lastMeasuredItemPosition.current?.originalScrollY !== undefined) {
+          scrollViewRef.current.scrollTo({
+            y: lastMeasuredItemPosition.current.originalScrollY,
+            animated: false,
+          });
+        }
+      }
 
-      // Restore original scroll position instantly
-      scrollViewRef.current.scrollTo({
-        y: originalScrollY,
-        animated: false,
-      });
-
-      // Update popup position after scroll is complete
-      setTimeout(() => {
-        updatePopupPosition(selectedItem);
-      }, 50);
+      // Update popup position after scroll
+      setTimeout(
+        () => {
+          updatePopupPosition(selectedItem);
+        },
+        Platform.OS === 'ios' ? 300 : 50,
+      );
     };
 
     const keyboardShow = Keyboard.addListener(
@@ -173,7 +218,7 @@ const App = () => {
       keyboardShow.remove();
       keyboardHide.remove();
     };
-  }, [selectedItem, updatePopupPosition, scrollOffset]);
+  }, [selectedItem, updatePopupPosition, ensureItemVisible]);
 
   const handleItemPress = useCallback(
     (id: number) => {
@@ -263,9 +308,12 @@ const App = () => {
         ref={scrollViewRef}
         style={styles.scrollView}
         keyboardShouldPersistTaps="handled"
-        contentInsetAdjustmentBehavior="always"
+        contentInsetAdjustmentBehavior="never"
+        automaticallyAdjustKeyboardInsets={false}
+        keyboardDismissMode="none"
         onScroll={handleScroll}
         scrollEventThrottle={16}
+        onLayout={handleScrollViewLayout}
       >
         {items.map(item => (
           <TouchableOpacity
@@ -310,16 +358,6 @@ const App = () => {
           accessibilityHint="Enter a value for the selected item"
         />
       </PopupMenu>
-
-      {/* <TouchableOpacity
-        style={styles.errorButton}
-        onPress={simulateError}
-        accessible={true}
-        accessibilityLabel="Simulate error"
-        accessibilityHint="Triggers an error to test error boundary"
-      >
-        <Text>Simulate Error</Text>
-      </TouchableOpacity> */}
     </SafeAreaView>
   );
 };
@@ -327,54 +365,42 @@ const App = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#F5F5F5',
   },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    height: HEADER_HEIGHT,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
     alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#ffffff',
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: '#E0E0E0',
   },
   title: {
     fontSize: 18,
-    fontWeight: 'bold',
+    fontWeight: '600',
+    color: '#000000',
   },
   scrollView: {
     flex: 1,
   },
   item: {
-    backgroundColor: '#ffffff',
-    padding: 16,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: '#E0E0E0',
   },
   selectedItem: {
-    backgroundColor: '#e3f2fd',
-    borderLeftWidth: 4,
-    borderLeftColor: '#2196f3',
+    backgroundColor: '#F0F0F0',
   },
   itemTitle: {
     fontSize: 16,
+    color: '#000000',
   },
   itemValue: {
     fontSize: 14,
     color: '#666666',
     marginTop: 4,
-  },
-  rtlButton: {
-    padding: 8,
-    backgroundColor: '#e0e0e0',
-    borderRadius: 4,
-  },
-  errorButton: {
-    padding: 8,
-    backgroundColor: '#ffcdd2',
-    borderRadius: 4,
-    margin: 16,
-    alignItems: 'center',
   },
 });
 
