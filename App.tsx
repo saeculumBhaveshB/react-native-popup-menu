@@ -78,33 +78,44 @@ const App = () => {
   }, []);
 
   // Function to measure and update popup position
-  const updatePopupPosition = useCallback((itemId: number) => {
-    const itemRef = itemRefs.current[itemId];
-    if (itemRef) {
-      itemRef.measure(
-        (
-          x: number,
-          y: number,
-          width: number,
-          height: number,
-          pageX: number,
-          pageY: number,
-        ) => {
-          logger.debug('Updating popup position', {
-            pageX,
-            pageY,
-            width,
-            height,
-          });
+  const updatePopupPosition = useCallback(
+    (itemId: number) => {
+      const itemRef = itemRefs.current[itemId];
+      if (itemRef) {
+        const measureAndUpdate = () => {
+          itemRef.measure(
+            (
+              x: number,
+              y: number,
+              width: number,
+              height: number,
+              pageX: number,
+              pageY: number,
+            ) => {
+              if (Platform.OS === 'ios') {
+                LayoutAnimation.configureNext(
+                  LayoutAnimation.Presets.easeInEaseOut,
+                );
+              }
 
-          setPopupPosition({
-            x: pageX + width + 10,
-            y: pageY + height / 2,
-          });
-        },
-      );
-    }
-  }, []);
+              setPopupPosition({
+                x: pageX + width + 10,
+                y: pageY + height / 2,
+              });
+            },
+          );
+        };
+
+        // Delay update if keyboard is visible on iOS to let scroll settle
+        if (Platform.OS === 'ios' && isKeyboardVisible) {
+          setTimeout(measureAndUpdate, 250);
+        } else {
+          measureAndUpdate();
+        }
+      }
+    },
+    [isKeyboardVisible],
+  );
 
   // Function to ensure item and popup are visible when keyboard shows
   const ensureItemVisible = useCallback(
@@ -395,15 +406,19 @@ const App = () => {
       if (Platform.OS === 'ios') {
         // iOS: Restore scroll position smoothly
         if (lastMeasuredItemPosition.current?.originalScrollY !== undefined) {
-          scrollViewRef.current.scrollTo({
-            y: lastMeasuredItemPosition.current.originalScrollY,
-            animated: true,
-          });
-
-          // Update popup position after scroll
           setTimeout(() => {
-            updatePopupPosition(selectedItem);
-          }, 300);
+            const originalScrollY =
+              lastMeasuredItemPosition.current?.originalScrollY ?? 0;
+            scrollViewRef.current?.scrollTo({
+              y: originalScrollY,
+              animated: true,
+            });
+
+            // Wait a bit more to ensure scroll completes before measuring
+            setTimeout(() => {
+              updatePopupPosition(selectedItem);
+            }, 300);
+          }, 100);
         }
       } else {
         // Android: Keep existing behavior
@@ -493,15 +508,19 @@ const App = () => {
       if (Platform.OS === 'ios') {
         // iOS: Restore scroll position smoothly
         if (lastMeasuredItemPosition.current?.originalScrollY !== undefined) {
-          scrollViewRef.current.scrollTo({
-            y: lastMeasuredItemPosition.current.originalScrollY,
-            animated: true,
-          });
-
-          // Update popup position after scroll
           setTimeout(() => {
-            updatePopupPosition(selectedItem);
-          }, 300);
+            const originalScrollY =
+              lastMeasuredItemPosition.current?.originalScrollY ?? 0;
+            scrollViewRef.current?.scrollTo({
+              y: originalScrollY,
+              animated: true,
+            });
+
+            // Wait a bit more to ensure scroll completes before measuring
+            setTimeout(() => {
+              updatePopupPosition(selectedItem);
+            }, 300);
+          }, 100);
         }
       } else {
         // Android: Keep existing behavior
