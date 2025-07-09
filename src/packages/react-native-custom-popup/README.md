@@ -1,16 +1,16 @@
 # React Native Custom Popup
 
-A highly customizable popup menu component for React Native with text input support.
+A flexible and customizable popup menu component for React Native with text input support and keyboard handling.
 
 ## Features
 
-- 📱 Works on both iOS and Android
-- 🎯 Precise positioning with arrow pointer
-- ⌨️ Keyboard-aware with smooth animations
-- 🎨 Highly customizable styling
-- 📝 Built-in text input support
-- 🔒 TypeScript support
-- ♿ Accessibility support
+- 📱 Fully customizable popup menu
+- ⌨️ Text input support with keyboard handling
+- 🎯 Smart positioning with arrow pointer
+- 🔄 Smooth animations
+- 📱 Platform-specific behavior (iOS/Android)
+- 🎨 Customizable styling
+- ✨ TypeScript support
 
 ## Installation
 
@@ -28,16 +28,16 @@ import { PopupMenu, PopupInput } from 'react-native-custom-popup';
 const MyComponent = () => {
   const [isVisible, setIsVisible] = useState(false);
   const [inputValue, setInputValue] = useState('');
-  const [position, setPosition] = useState({ x: 0, y: 0, width: 0, height: 0 });
+  const [position, setPosition] = useState({ x: 0, y: 0 });
 
   const handlePress = event => {
-    const { pageX, pageY, width, height } = event.nativeEvent;
-    setPosition({ x: pageX, y: pageY, width, height });
+    const { pageX, pageY } = event.nativeEvent;
+    setPosition({ x: pageX, y: pageY });
     setIsVisible(true);
   };
 
   return (
-    <>
+    <View>
       <TouchableOpacity onPress={handlePress}>
         <Text>Open Popup</Text>
       </TouchableOpacity>
@@ -49,79 +49,73 @@ const MyComponent = () => {
       >
         <PopupInput
           value={inputValue}
-          onChangeText={setInputValue}
+          onChange={setInputValue}
           placeholder="Enter text..."
         />
       </PopupMenu>
-    </>
+    </View>
   );
 };
 ```
 
-## Props
+## Components
 
-### PopupMenu Props
+### PopupMenu
 
-| Prop            | Type          | Required | Default         | Description                    |
-| --------------- | ------------- | -------- | --------------- | ------------------------------ |
-| isVisible       | boolean       | Yes      | -               | Controls popup visibility      |
-| position        | PopupPosition | Yes      | -               | Target element position        |
-| onClose         | () => void    | Yes      | -               | Called when popup should close |
-| children        | ReactNode     | Yes      | -               | Popup content                  |
-| style           | ViewStyle     | No       | -               | Custom container styles        |
-| backgroundColor | string        | No       | 'white'         | Popup background color         |
-| width           | number        | No       | 250             | Popup width                    |
-| borderRadius    | number        | No       | 8               | Popup border radius            |
-| showArrow       | boolean       | No       | true            | Show/hide arrow pointer        |
-| arrowColor      | string        | No       | backgroundColor | Arrow pointer color            |
+The main container component for the popup.
 
-### PopupInput Props
+#### Props
 
-| Prop           | Type                   | Required | Default   | Description            |
-| -------------- | ---------------------- | -------- | --------- | ---------------------- |
-| value          | string                 | Yes      | -         | Input value            |
-| onChangeText   | (text: string) => void | Yes      | -         | Value change handler   |
-| containerStyle | ViewStyle              | No       | -         | Input container styles |
-| inputStyle     | TextStyle              | No       | -         | Text input styles      |
-| borderColor    | string                 | No       | '#e0e0e0' | Input border color     |
-| borderWidth    | number                 | No       | 1         | Input border width     |
-| borderRadius   | number                 | No       | 4         | Input border radius    |
-| padding        | number                 | No       | 12        | Input padding          |
+| Prop            | Type                     | Required | Default   | Description                            |
+| --------------- | ------------------------ | -------- | --------- | -------------------------------------- |
+| isVisible       | boolean                  | Yes      | -         | Controls the visibility of the popup   |
+| position        | { x: number; y: number } | Yes      | -         | Position where the popup should appear |
+| onClose         | () => void               | Yes      | -         | Callback when popup should close       |
+| children        | ReactNode                | Yes      | -         | Content to display inside the popup    |
+| width           | number                   | No       | 250       | Width of the popup                     |
+| borderRadius    | number                   | No       | 8         | Border radius of the popup             |
+| backgroundColor | string                   | No       | 'white'   | Background color of the popup          |
+| shadowColor     | string                   | No       | '#000000' | Shadow color of the popup              |
+| arrowHeight     | number                   | No       | 12        | Height of the arrow pointer            |
 
-## Custom Styling Example
+### PopupInput
 
-```typescript
-<PopupMenu
-  isVisible={isVisible}
-  position={position}
-  onClose={handleClose}
-  backgroundColor="#f8f9fa"
-  borderRadius={12}
-  width={300}
-  style={{
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 5,
-  }}
->
-  <PopupInput
-    value={inputValue}
-    onChangeText={setInputValue}
-    placeholder="Custom styled input..."
-    borderColor="#007AFF"
-    borderRadius={8}
-    padding={16}
-    containerStyle={{ margin: 12 }}
-    inputStyle={{ fontSize: 16 }}
-  />
-</PopupMenu>
-```
+A customizable text input component designed for the popup.
+
+#### Props
+
+| Prop               | Type                   | Required | Default   | Description                   |
+| ------------------ | ---------------------- | -------- | --------- | ----------------------------- |
+| value              | string                 | Yes      | -         | Current value of the input    |
+| onChange           | (text: string) => void | Yes      | -         | Callback when text changes    |
+| placeholder        | string                 | No       | -         | Placeholder text              |
+| borderColor        | string                 | No       | '#e0e0e0' | Border color in normal state  |
+| focusedBorderColor | string                 | No       | '#007AFF' | Border color when focused     |
+| borderWidth        | number                 | No       | 1         | Width of the border           |
+| borderRadius       | number                 | No       | 4         | Border radius of the input    |
+| padding            | number                 | No       | 12        | Internal padding of the input |
+
+## Platform Specific Notes
+
+### iOS
+
+- Uses `keyboardWillShow/Hide` events for smoother animations
+- Includes a "Done" button in the keyboard accessory view
+- Supports keyboard accessory view customization
+
+### Android
+
+- Uses `keyboardDidShow/Hide` events
+- Native keyboard handling behavior
+- Supports custom input accessories through native options
+
+## Example App
+
+Check out the [example](../../../examples/BasicUsage.tsx) for a complete implementation.
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+We welcome contributions! Please see our [contributing guide](CONTRIBUTING.md) for details.
 
 ## License
 

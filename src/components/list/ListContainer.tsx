@@ -1,28 +1,30 @@
 import React, { useMemo } from 'react';
-import { FlatList, StyleSheet } from 'react-native';
+import { FlatList, StyleSheet, View } from 'react-native';
 import type { ListContainerProps, ListItem } from './types';
 import { ListItem as ListItemComponent } from './ListItem';
 
 export const ListContainer: React.FC<ListContainerProps> = ({
-  items,
   onItemPress,
 }) => {
-  const renderItem = ({ item }: { item: ListItem }) => (
-    <ListItemComponent item={item} onPress={onItemPress} />
-  );
-
-  const keyExtractor = (item: ListItem) => item.id;
+  const data = useMemo(() => {
+    return Array.from({ length: 100 }, (_, index) => ({
+      id: index + 1,
+      text: `Item ${index + 1}`,
+    }));
+  }, []);
 
   return (
-    <FlatList
-      data={items}
-      renderItem={renderItem}
-      keyExtractor={keyExtractor}
-      style={styles.container}
-      windowSize={5}
-      maxToRenderPerBatch={10}
-      removeClippedSubviews={true}
-    />
+    <View style={styles.container}>
+      <FlatList
+        data={data}
+        renderItem={({ item }) => (
+          <ListItemComponent item={item} onPress={onItemPress} />
+        )}
+        keyExtractor={item => item.id.toString()}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.contentContainer}
+      />
+    </View>
   );
 };
 
@@ -30,5 +32,8 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: 'white',
+  },
+  contentContainer: {
+    flexGrow: 1,
   },
 });

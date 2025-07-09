@@ -1,20 +1,31 @@
-import React, { useCallback, useRef } from 'react';
-import { View, Text, TouchableHighlight, StyleSheet } from 'react-native';
+import React, { useCallback } from 'react';
+import {
+  TouchableHighlight,
+  Text,
+  StyleSheet,
+  View,
+  GestureResponderEvent,
+} from 'react-native';
 import type { ListItemProps } from './types';
 
 export const ListItem: React.FC<ListItemProps> = ({ item, onPress }) => {
-  const viewRef = useRef<View>(null);
-
-  const handlePress = useCallback(() => {
-    viewRef.current?.measure((x, y, width, height, pageX, pageY) => {
-      onPress(item, { x: pageX, y: pageY, width, height });
-    });
-  }, [item, onPress]);
+  const handlePress = useCallback(
+    (event: GestureResponderEvent) => {
+      const { pageX, pageY } = event.nativeEvent;
+      onPress(item, { x: pageX, y: pageY });
+    },
+    [item, onPress],
+  );
 
   return (
-    <TouchableHighlight onPress={handlePress} underlayColor="#f0f0f0">
-      <View ref={viewRef} style={styles.container}>
+    <TouchableHighlight
+      onPress={handlePress}
+      underlayColor="#f0f0f0"
+      style={styles.container}
+    >
+      <View>
         <Text style={styles.text}>{item.text}</Text>
+        <View style={styles.separator} />
       </View>
     </TouchableHighlight>
   );
@@ -25,11 +36,17 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
   },
   text: {
     fontSize: 16,
     color: '#000000',
+  },
+  separator: {
+    position: 'absolute',
+    bottom: -1,
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: '#e0e0e0',
   },
 });

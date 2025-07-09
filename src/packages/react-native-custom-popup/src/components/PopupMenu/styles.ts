@@ -7,6 +7,10 @@ export const createStyles = ({
   shadowColor = '#000000',
 }) =>
   StyleSheet.create({
+    backdrop: {
+      flex: 1,
+      backgroundColor: 'transparent',
+    },
     container: {
       position: 'absolute',
       width,
