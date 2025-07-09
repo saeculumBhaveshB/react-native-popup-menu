@@ -16,6 +16,11 @@ import {
   Platform,
   I18nManager,
   type View as ViewType,
+  Keyboard,
+  KeyboardEvent,
+  LayoutAnimation,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
 } from 'react-native';
 import { PopupMenu } from './src/packages/react-native-custom-popup/src/components/PopupMenu';
 import { PopupInput } from './src/packages/react-native-custom-popup/src/components/PopupInput';
@@ -33,10 +38,29 @@ const App = () => {
   const [popupPosition, setPopupPosition] = useState({ x: 0, y: 0 });
   const [isPopupVisible, setIsPopupVisible] = useState(false);
   const itemRefs = useRef<{ [key: number]: ViewType }>({});
+  const scrollViewRef = useRef<ScrollView>(null);
+  const [scrollOffset, setScrollOffset] = useState(0);
+  const lastMeasuredItemPosition = useRef<{
+    y: number;
+    height: number;
+    originalScrollY: number;
+  } | null>(null);
 
-  const handleItemPress = useCallback((id: number) => {
-    logger.debug('Item pressed', { id });
-    const itemRef = itemRefs.current[id];
+  // Enable LayoutAnimation for smooth transitions
+  React.useEffect(() => {
+    if (Platform.OS === 'android') {
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    }
+  }, []);
+
+  // Track scroll position
+  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    setScrollOffset(event.nativeEvent.contentOffset.y);
+  };
+
+  // Function to measure and update popup position
+  const updatePopupPosition = useCallback((itemId: number) => {
+    const itemRef = itemRefs.current[itemId];
     if (itemRef) {
       itemRef.measure(
         (
@@ -47,24 +71,157 @@ const App = () => {
           pageX: number,
           pageY: number,
         ) => {
-          logger.debug('Item position measured', {
+          logger.debug('Updating popup position', {
             pageX,
             pageY,
             width,
             height,
           });
-          setPopupPosition({ x: pageX, y: pageY + height });
-          setSelectedItem(id);
-          setIsPopupVisible(true);
+
+          setPopupPosition({
+            x: pageX + width + 10,
+            y: pageY + height / 2,
+          });
         },
       );
     }
   }, []);
 
+  // Handle keyboard events
+  React.useEffect(() => {
+    const keyboardWillShow = (e: KeyboardEvent) => {
+      if (!selectedItem || !scrollViewRef.current) return;
+
+      // Get current scroll position
+      const currentScrollY = scrollOffset;
+
+      // Store original position if not already stored
+      if (!lastMeasuredItemPosition.current?.originalScrollY) {
+        lastMeasuredItemPosition.current = {
+          ...lastMeasuredItemPosition.current!,
+          originalScrollY: currentScrollY,
+        };
+      }
+
+      const itemRef = itemRefs.current[selectedItem];
+      if (itemRef) {
+        itemRef.measure(
+          (
+            x: number,
+            y: number,
+            width: number,
+            height: number,
+            pageX: number,
+            pageY: number,
+          ) => {
+            const keyboardHeight = e.endCoordinates.height;
+            const screenHeight = e.endCoordinates.screenY - keyboardHeight;
+            const itemBottom = pageY + height;
+
+            // Calculate how much we need to scroll
+            if (itemBottom > screenHeight) {
+              const scrollOffset = itemBottom - screenHeight + 50;
+
+              // Scroll instantly
+              scrollViewRef.current?.scrollTo({
+                y: scrollOffset,
+                animated: false,
+              });
+
+              // Update positions after a small delay to ensure scroll is complete
+              setTimeout(() => {
+                updatePopupPosition(selectedItem);
+              }, 50);
+            }
+          },
+        );
+      }
+    };
+
+    const keyboardWillHide = () => {
+      if (
+        !selectedItem ||
+        !scrollViewRef.current ||
+        !lastMeasuredItemPosition.current
+      )
+        return;
+
+      const { originalScrollY } = lastMeasuredItemPosition.current;
+
+      // Restore original scroll position instantly
+      scrollViewRef.current.scrollTo({
+        y: originalScrollY,
+        animated: false,
+      });
+
+      // Update popup position after scroll is complete
+      setTimeout(() => {
+        updatePopupPosition(selectedItem);
+      }, 50);
+    };
+
+    const keyboardShow = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      keyboardWillShow,
+    );
+    const keyboardHide = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      keyboardWillHide,
+    );
+
+    return () => {
+      keyboardShow.remove();
+      keyboardHide.remove();
+    };
+  }, [selectedItem, updatePopupPosition, scrollOffset]);
+
+  const handleItemPress = useCallback(
+    (id: number) => {
+      logger.debug('Item pressed', { id });
+      const itemRef = itemRefs.current[id];
+      if (itemRef) {
+        itemRef.measure(
+          (
+            x: number,
+            y: number,
+            width: number,
+            height: number,
+            pageX: number,
+            pageY: number,
+          ) => {
+            logger.debug('Item position measured', {
+              pageX,
+              pageY,
+              width,
+              height,
+            });
+
+            // Store the measured position and current scroll position
+            lastMeasuredItemPosition.current = {
+              y: pageY,
+              height,
+              originalScrollY: scrollOffset,
+            };
+
+            setPopupPosition({
+              x: pageX + width + 10,
+              y: pageY + height / 2,
+            });
+            setSelectedItem(id);
+            setIsPopupVisible(true);
+          },
+        );
+      }
+    },
+    [scrollOffset],
+  );
+
   const handlePopupClose = useCallback(() => {
     logger.debug('Popup closed');
     setIsPopupVisible(false);
     setSelectedItem(null);
+    lastMeasuredItemPosition.current = null;
+    Keyboard.dismiss();
   }, []);
 
   const handleInputChange = useCallback(
@@ -100,12 +257,16 @@ const App = () => {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Popup Menu Test App</Text>
-        <TouchableOpacity onPress={toggleRTL} style={styles.rtlButton}>
-          <Text>Toggle RTL</Text>
-        </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.scrollView}>
+      <ScrollView
+        ref={scrollViewRef}
+        style={styles.scrollView}
+        keyboardShouldPersistTaps="handled"
+        contentInsetAdjustmentBehavior="always"
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
+      >
         {items.map(item => (
           <TouchableOpacity
             key={item.id}
@@ -114,7 +275,10 @@ const App = () => {
                 itemRefs.current[item.id] = ref;
               }
             }}
-            style={styles.item}
+            style={[
+              styles.item,
+              selectedItem === item.id && styles.selectedItem,
+            ]}
             onPress={() => handleItemPress(item.id)}
             accessible={true}
             accessibilityLabel={`Item ${item.id}`}
@@ -147,7 +311,7 @@ const App = () => {
         />
       </PopupMenu>
 
-      <TouchableOpacity
+      {/* <TouchableOpacity
         style={styles.errorButton}
         onPress={simulateError}
         accessible={true}
@@ -155,7 +319,7 @@ const App = () => {
         accessibilityHint="Triggers an error to test error boundary"
       >
         <Text>Simulate Error</Text>
-      </TouchableOpacity>
+      </TouchableOpacity> */}
     </SafeAreaView>
   );
 };
@@ -170,7 +334,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 16,
-    backgroundColor: '#fff',
+    backgroundColor: '#ffffff',
     borderBottomWidth: 1,
     borderBottomColor: '#e0e0e0',
   },
@@ -178,35 +342,39 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
   },
+  scrollView: {
+    flex: 1,
+  },
+  item: {
+    backgroundColor: '#ffffff',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  selectedItem: {
+    backgroundColor: '#e3f2fd',
+    borderLeftWidth: 4,
+    borderLeftColor: '#2196f3',
+  },
+  itemTitle: {
+    fontSize: 16,
+  },
+  itemValue: {
+    fontSize: 14,
+    color: '#666666',
+    marginTop: 4,
+  },
   rtlButton: {
     padding: 8,
     backgroundColor: '#e0e0e0',
     borderRadius: 4,
   },
-  scrollView: {
-    flex: 1,
-  },
-  item: {
-    backgroundColor: '#fff',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-  },
-  itemTitle: {
-    fontSize: 16,
-    marginBottom: 4,
-  },
-  itemValue: {
-    fontSize: 14,
-    color: '#666',
-  },
   errorButton: {
-    position: 'absolute',
-    bottom: 20,
-    right: 20,
-    backgroundColor: '#ff5252',
-    padding: 12,
-    borderRadius: 8,
+    padding: 8,
+    backgroundColor: '#ffcdd2',
+    borderRadius: 4,
+    margin: 16,
+    alignItems: 'center',
   },
 });
 

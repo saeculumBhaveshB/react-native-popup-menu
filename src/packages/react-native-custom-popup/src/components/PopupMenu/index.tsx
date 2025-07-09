@@ -1,114 +1,62 @@
-import React, { useCallback, useEffect, useMemo } from 'react';
-import {
-  View,
-  Modal,
-  TouchableWithoutFeedback,
-  Animated,
-  Dimensions,
-  StyleSheet,
-} from 'react-native';
-import { CloseButton } from '../CloseButton';
+import React from 'react';
+import { View, Text, TouchableOpacity, Dimensions } from 'react-native';
+import { styles } from './styles';
 import { PopupArrow } from '../PopupArrow';
-import { PopupMenuProps } from './types';
-import { usePopupAnimation } from '../../hooks/usePopupAnimation';
-import { usePopupPosition } from '../../hooks/usePopupPosition';
-import { useKeyboard } from '../../hooks/useKeyboard';
-import { createStyles } from './styles';
-import { ErrorBoundary } from '../ErrorBoundary';
+import { logger } from '../../utils/logger';
+import type { PopupMenuProps } from './types';
 
-const PopupMenuComponent: React.FC<PopupMenuProps> = ({
+const SCREEN_WIDTH = Dimensions.get('window').width;
+const POPUP_WIDTH = 250; // Fixed popup width
+const ARROW_SIZE = 12; // Size of the arrow pointer
+
+export const PopupMenu: React.FC<PopupMenuProps> = ({
   isVisible,
   position,
   onClose,
   children,
-  style,
-  width = 250,
-  borderRadius = 8,
-  backgroundColor = 'white',
-  shadowColor = '#000000',
-  arrowHeight = 12,
 }) => {
-  const styles = useMemo(
-    () => createStyles({ width, borderRadius, backgroundColor, shadowColor }),
-    [width, borderRadius, backgroundColor, shadowColor],
-  );
-
-  const { scale, opacity, startAnimation } = usePopupAnimation();
-  const { keyboardHeight, isKeyboardVisible } = useKeyboard();
-
-  const { height: screenHeight } = Dimensions.get('window');
-
-  const adjustedPosition = useMemo(() => {
-    if (!isKeyboardVisible) return position;
-
-    const keyboardY = screenHeight - keyboardHeight;
-    if (position.y + width > keyboardY) {
-      return {
-        ...position,
-        y: keyboardY - width - 20,
-      };
-    }
-    return position;
-  }, [position, isKeyboardVisible, keyboardHeight, screenHeight, width]);
-
-  const { popupPosition, arrowPosition } = usePopupPosition({
-    triggerPosition: adjustedPosition,
-    popupWidth: width,
-    arrowHeight,
-  });
-
-  const animatedStyles = useMemo(
-    () => [
-      styles.container,
-      {
-        transform: [{ scale }],
-        opacity,
-        left: popupPosition.x,
-        top: popupPosition.y,
-      },
-      style,
-    ],
-    [styles.container, scale, opacity, popupPosition.x, popupPosition.y, style],
-  );
-
-  useEffect(() => {
-    if (isVisible) {
-      startAnimation(true);
-    }
-  }, [isVisible, startAnimation]);
-
-  const handleBackdropPress = useCallback(() => {
-    onClose();
-  }, [onClose]);
-
   if (!isVisible) return null;
 
+  // Calculate if popup should appear on left or right side
+  const shouldShowOnLeft = position.x + POPUP_WIDTH + ARROW_SIZE > SCREEN_WIDTH;
+
+  // Calculate final popup position
+  const popupStyle = {
+    position: 'absolute' as const,
+    left: shouldShowOnLeft
+      ? position.x - POPUP_WIDTH - ARROW_SIZE // Show on left
+      : position.x, // Show on right
+    top: position.y - POPUP_WIDTH / 4, // Center vertically relative to the point
+  };
+
+  // Calculate arrow position and direction
+  const arrowStyle = {
+    position: 'absolute' as const,
+    top: POPUP_WIDTH / 4 - ARROW_SIZE / 2, // Align with popup center
+    [shouldShowOnLeft ? 'right' : 'left']: -ARROW_SIZE,
+    transform: [{ rotate: shouldShowOnLeft ? '0deg' : '180deg' }],
+  };
+
+  logger.debug('Rendering popup with position', {
+    position,
+    shouldShowOnLeft,
+    popupStyle,
+    arrowStyle,
+  });
+
   return (
-    <Modal transparent visible={isVisible} onRequestClose={onClose}>
-      <TouchableWithoutFeedback
-        onPress={handleBackdropPress}
-        testID="popup-backdrop"
+    <View style={[styles.container, popupStyle]}>
+      <TouchableOpacity
+        style={styles.closeButton}
+        onPress={onClose}
+        hitSlop={{ top: 10, right: 10, bottom: 10, left: 10 }}
       >
-        <View style={styles.backdrop}>
-          <Animated.View style={animatedStyles} testID="popup-container">
-            <CloseButton onPress={onClose} />
-            <PopupArrow
-              position={arrowPosition}
-              height={arrowHeight}
-              backgroundColor={backgroundColor}
-            />
-            <View style={styles.content}>{children}</View>
-          </Animated.View>
-        </View>
-      </TouchableWithoutFeedback>
-    </Modal>
+        <Text style={styles.closeButtonText}>X</Text>
+      </TouchableOpacity>
+      <View style={arrowStyle}>
+        <PopupArrow size={ARROW_SIZE} color="#FFFFFF" />
+      </View>
+      <View style={styles.content}>{children}</View>
+    </View>
   );
 };
-
-const PopupMenu = (props: PopupMenuProps) => (
-  <ErrorBoundary>
-    <PopupMenuComponent {...props} />
-  </ErrorBoundary>
-);
-
-export { PopupMenu };
