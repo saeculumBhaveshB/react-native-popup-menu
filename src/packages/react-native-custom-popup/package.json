@@ -1,31 +1,9 @@
 {
   "name": "react-native-custom-popup",
   "version": "1.0.0",
-  "description": "A customizable popup menu component for React Native with text input support",
-  "main": "src/index.ts",
-  "types": "src/index.ts",
-  "scripts": {
-    "build": "tsc",
-    "test": "jest"
-  },
-  "keywords": [
-    "react-native",
-    "popup",
-    "menu",
-    "modal",
-    "input",
-    "typescript"
-  ],
-  "author": "",
-  "license": "MIT",
   "peerDependencies": {
     "react": ">=16.8.0",
     "react-native": ">=0.60.0",
     "react-native-svg": ">=12.0.0"
-  },
-  "devDependencies": {
-    "@types/react": ">=16.8.0",
-    "@types/react-native": ">=0.60.0",
-    "typescript": ">=4.0.0"
   }
 }
