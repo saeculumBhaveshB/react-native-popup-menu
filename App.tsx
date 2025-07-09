@@ -22,6 +22,7 @@ import {
   NativeSyntheticEvent,
   NativeScrollEvent,
   Dimensions,
+  StatusBar,
 } from 'react-native';
 import { PopupMenu } from './src/packages/react-native-custom-popup/src/components/PopupMenu';
 import { PopupInput } from './src/packages/react-native-custom-popup/src/components/PopupInput';
@@ -36,6 +37,8 @@ const TEST_ITEMS = Array.from({ length: 100 }, (_, i) => ({
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 const HEADER_HEIGHT = 60; // Height of the "Popup Menu Test App" header
 const KEYBOARD_PADDING = 20;
+const POPUP_HEIGHT = 100; // Approximate height of the popup including input
+const STATUS_BAR_HEIGHT = StatusBar.currentHeight || 0;
 
 const App = () => {
   const [items, setItems] = useState(TEST_ITEMS);
@@ -97,7 +100,7 @@ const App = () => {
     }
   }, []);
 
-  // Function to ensure item is visible when keyboard shows
+  // Function to ensure item and popup are visible when keyboard shows
   const ensureItemVisible = useCallback(
     (itemId: number, keyboardHeight: number, screenHeight: number) => {
       const itemRef = itemRefs.current[itemId];
@@ -114,24 +117,48 @@ const App = () => {
         ) => {
           const itemTop = pageY;
           const itemBottom = pageY + height;
-          const visibleAreaTop = HEADER_HEIGHT;
+          const visibleAreaTop = HEADER_HEIGHT + STATUS_BAR_HEIGHT;
           const visibleAreaBottom = screenHeight - keyboardHeight;
           const visibleHeight = visibleAreaBottom - visibleAreaTop;
 
+          // Calculate the space needed for both item and popup
+          const totalHeightNeeded = height + POPUP_HEIGHT;
+          const availableSpace = visibleAreaBottom - itemTop;
+
           if (Platform.OS === 'ios') {
-            // iOS: Calculate the ideal position to keep the item visible
-            const idealPosition = Math.max(0, itemTop - visibleHeight / 3);
+            // iOS: Calculate ideal position to keep both item and popup visible
+            let targetScroll;
+
+            if (availableSpace < totalHeightNeeded) {
+              // Not enough space below, scroll up to make space
+              targetScroll =
+                scrollOffset +
+                (totalHeightNeeded - availableSpace) +
+                KEYBOARD_PADDING;
+            } else if (itemTop < visibleAreaTop) {
+              // Item is above visible area, scroll down
+              targetScroll = Math.max(
+                0,
+                scrollOffset - (visibleAreaTop - itemTop) - KEYBOARD_PADDING,
+              );
+            } else {
+              // Item is in good position, maintain current scroll
+              targetScroll = scrollOffset;
+            }
+
             scrollViewRef.current?.scrollTo({
-              y: idealPosition,
+              y: targetScroll,
               animated: true,
             });
           } else {
-            // Android: Adjust scroll only if item would be hidden by keyboard
-            if (itemBottom > visibleAreaBottom) {
-              const scrollOffset =
-                itemBottom - visibleAreaBottom + KEYBOARD_PADDING;
+            // Android: Adjust scroll if item or popup would be hidden
+            if (itemBottom + POPUP_HEIGHT > visibleAreaBottom) {
+              const targetScroll =
+                scrollOffset +
+                (itemBottom + POPUP_HEIGHT - visibleAreaBottom) +
+                KEYBOARD_PADDING;
               scrollViewRef.current?.scrollTo({
-                y: scrollOffset,
+                y: targetScroll,
                 animated: false,
               });
             }
@@ -147,7 +174,7 @@ const App = () => {
         },
       );
     },
-    [updatePopupPosition],
+    [scrollOffset, updatePopupPosition],
   );
 
   // Handle keyboard events
@@ -157,8 +184,7 @@ const App = () => {
 
       if (Platform.OS === 'ios') {
         const keyboardHeight = e.endCoordinates.height;
-        const screenHeight = SCREEN_HEIGHT;
-        ensureItemVisible(selectedItem, keyboardHeight, screenHeight);
+        ensureItemVisible(selectedItem, keyboardHeight, SCREEN_HEIGHT);
       } else {
         // Android: Store current scroll position and handle visibility
         const currentScrollY = scrollOffset;
@@ -218,7 +244,7 @@ const App = () => {
       keyboardShow.remove();
       keyboardHide.remove();
     };
-  }, [selectedItem, updatePopupPosition, ensureItemVisible]);
+  }, [selectedItem, updatePopupPosition, ensureItemVisible, scrollOffset]);
 
   const handleItemPress = useCallback(
     (id: number) => {
