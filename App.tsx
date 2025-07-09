@@ -5,7 +5,7 @@
  * @format
  */
 
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useMemo } from 'react';
 import {
   SafeAreaView,
   StyleSheet,
@@ -40,6 +40,9 @@ const KEYBOARD_PADDING = 20;
 const POPUP_HEIGHT = 100; // Approximate height of the popup including input
 const STATUS_BAR_HEIGHT = StatusBar.currentHeight || 0;
 
+const EXTRA_BOTTOM_SPACE = 150; // Extra space for the last item
+const SCROLL_ADJUSTMENT_DELAY = 100;
+
 const App = () => {
   const [items, setItems] = useState(TEST_ITEMS);
   const [selectedItem, setSelectedItem] = useState<number | null>(null);
@@ -54,6 +57,9 @@ const App = () => {
     height: number;
     originalScrollY: number;
   } | null>(null);
+
+  // Add this state to track keyboard visibility
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
 
   // Enable LayoutAnimation for smooth transitions
   React.useEffect(() => {
@@ -121,37 +127,179 @@ const App = () => {
           const visibleAreaBottom = screenHeight - keyboardHeight;
           const visibleHeight = visibleAreaBottom - visibleAreaTop;
 
-          // Calculate the space needed for both item and popup
-          const totalHeightNeeded = height + POPUP_HEIGHT;
-          const availableSpace = visibleAreaBottom - itemTop;
-
           if (Platform.OS === 'ios') {
-            // iOS: Calculate ideal position to keep both item and popup visible
-            let targetScroll;
+            // iOS: Special handling for items near the bottom
+            // const isLastItem = itemId === TEST_ITEMS.length;
+            const isLastItem = itemId === TEST_ITEMS[TEST_ITEMS.length - 1].id;
 
-            if (availableSpace < totalHeightNeeded) {
-              // Not enough space below, scroll up to make space
-              targetScroll =
-                scrollOffset +
-                (totalHeightNeeded - availableSpace) +
-                KEYBOARD_PADDING;
-            } else if (itemTop < visibleAreaTop) {
-              // Item is above visible area, scroll down
-              targetScroll = Math.max(
+            if (isLastItem) {
+              // For the last item, we need to ensure extra space at the bottom
+              const extraScrollSpace = EXTRA_BOTTOM_SPACE;
+              const totalNeededHeight =
+                itemBottom + POPUP_HEIGHT + extraScrollSpace;
+
+              // Calculate initial scroll position
+              const initialScroll = Math.max(
                 0,
-                scrollOffset - (visibleAreaTop - itemTop) - KEYBOARD_PADDING,
+                scrollOffset + (totalNeededHeight - visibleHeight),
               );
-            } else {
-              // Item is in good position, maintain current scroll
-              targetScroll = scrollOffset;
-            }
 
-            scrollViewRef.current?.scrollTo({
-              y: targetScroll,
-              animated: true,
-            });
+              // Immediate scroll to bring content into view
+              scrollViewRef.current?.scrollTo({
+                y: initialScroll,
+                animated: false,
+              });
+
+              // First adjustment with delay
+              setTimeout(() => {
+                const adjustedScroll = initialScroll + KEYBOARD_PADDING;
+                scrollViewRef.current?.scrollTo({
+                  y: adjustedScroll,
+                  animated: true,
+                });
+
+                // Second adjustment to ensure visibility
+                setTimeout(() => {
+                  itemRef.measure(
+                    (
+                      x2: number,
+                      y2: number,
+                      width2: number,
+                      height2: number,
+                      pageX2: number,
+                      pageY2: number,
+                    ) => {
+                      const newItemBottom = pageY2 + height2;
+                      const newVisibleBottom = screenHeight - keyboardHeight;
+
+                      if (
+                        newItemBottom >
+                        newVisibleBottom - POPUP_HEIGHT - KEYBOARD_PADDING
+                      ) {
+                        const finalScroll =
+                          adjustedScroll +
+                          (newItemBottom -
+                            (newVisibleBottom -
+                              POPUP_HEIGHT -
+                              KEYBOARD_PADDING));
+
+                        scrollViewRef.current?.scrollTo({
+                          y: finalScroll,
+                          animated: true,
+                        });
+                      }
+
+                      // Update popup position
+                      setPopupPosition({
+                        x: pageX2 + width2 + 10,
+                        y: Math.min(
+                          pageY2 + height2 / 2,
+                          newVisibleBottom - POPUP_HEIGHT - KEYBOARD_PADDING,
+                        ),
+                      });
+                    },
+                  );
+                }, SCROLL_ADJUSTMENT_DELAY);
+              }, SCROLL_ADJUSTMENT_DELAY);
+            } else {
+              // Existing logic for non-last items
+              const isLastItem = itemId === TEST_ITEMS.length;
+
+              if (isLastItem) {
+                // For the last item, calculate the total content height needed
+                const totalNeededHeight =
+                  itemBottom + POPUP_HEIGHT + KEYBOARD_PADDING * 3;
+                const availableHeight = visibleAreaBottom - visibleAreaTop;
+
+                // Calculate how much we need to scroll
+                const targetScroll = Math.max(
+                  0,
+                  scrollOffset + (totalNeededHeight - availableHeight),
+                );
+
+                // First immediate scroll to bring most of the content into view
+                scrollViewRef.current?.scrollTo({
+                  y: targetScroll - KEYBOARD_PADDING * 2,
+                  animated: false,
+                });
+
+                // Then adjust with animation for final position
+                requestAnimationFrame(() => {
+                  scrollViewRef.current?.scrollTo({
+                    y: targetScroll,
+                    animated: true,
+                  });
+
+                  // Update popup position after the scroll animation
+                  setTimeout(() => {
+                    itemRef.measure(
+                      (
+                        x: number,
+                        y: number,
+                        width: number,
+                        height: number,
+                        pageX: number,
+                        pageY: number,
+                      ) => {
+                        const finalVisibleBottom =
+                          screenHeight - keyboardHeight;
+                        setPopupPosition({
+                          x: pageX + width + 10,
+                          y: Math.min(
+                            pageY + height / 2,
+                            finalVisibleBottom -
+                              POPUP_HEIGHT -
+                              KEYBOARD_PADDING,
+                          ),
+                        });
+                      },
+                    );
+                  }, 300);
+                });
+              } else if (itemBottom + POPUP_HEIGHT > visibleAreaBottom) {
+                // For items that would be hidden by keyboard
+                const targetScroll = Math.max(
+                  0,
+                  scrollOffset +
+                    (itemBottom + POPUP_HEIGHT - visibleAreaBottom) +
+                    KEYBOARD_PADDING * 2,
+                );
+
+                scrollViewRef.current?.scrollTo({
+                  y: targetScroll - KEYBOARD_PADDING,
+                  animated: false,
+                });
+
+                setTimeout(() => {
+                  scrollViewRef.current?.scrollTo({
+                    y: targetScroll,
+                    animated: true,
+                  });
+
+                  // Update popup position after scroll
+                  setTimeout(() => {
+                    updatePopupPosition(itemId);
+                  }, 300);
+                }, 50);
+              } else if (itemTop < visibleAreaTop) {
+                // For items above visible area
+                const targetScroll = Math.max(
+                  0,
+                  scrollOffset - (visibleAreaTop - itemTop) - KEYBOARD_PADDING,
+                );
+                scrollViewRef.current?.scrollTo({
+                  y: targetScroll,
+                  animated: true,
+                });
+
+                // Update popup position after scroll
+                setTimeout(() => {
+                  updatePopupPosition(itemId);
+                }, 300);
+              }
+            }
           } else {
-            // Android: Adjust scroll if item or popup would be hidden
+            // Android: Keep existing behavior
             if (itemBottom + POPUP_HEIGHT > visibleAreaBottom) {
               const targetScroll =
                 scrollOffset +
@@ -161,32 +309,71 @@ const App = () => {
                 y: targetScroll,
                 animated: false,
               });
+
+              setTimeout(() => {
+                updatePopupPosition(itemId);
+              }, 50);
             }
           }
-
-          // Update popup position after scroll
-          setTimeout(
-            () => {
-              updatePopupPosition(itemId);
-            },
-            Platform.OS === 'ios' ? 300 : 50,
-          );
         },
       );
     },
     [scrollOffset, updatePopupPosition],
   );
 
-  // Handle keyboard events
+  // Update keyboard event handlers
   React.useEffect(() => {
     const keyboardWillShow = (e: KeyboardEvent) => {
+      setIsKeyboardVisible(true);
       if (!selectedItem || !scrollViewRef.current) return;
 
       if (Platform.OS === 'ios') {
         const keyboardHeight = e.endCoordinates.height;
-        ensureItemVisible(selectedItem, keyboardHeight, SCREEN_HEIGHT);
+        const screenHeight = SCREEN_HEIGHT;
+        const isLastItem = selectedItem === TEST_ITEMS.length;
+
+        if (isLastItem) {
+          // Pre-emptive scroll for last item
+          const itemRef = itemRefs.current[selectedItem];
+          if (itemRef) {
+            itemRef.measure(
+              (
+                x: number,
+                y: number,
+                width: number,
+                height: number,
+                pageX: number,
+                pageY: number,
+              ) => {
+                const itemBottom = pageY + height;
+                const visibleBottom = screenHeight - keyboardHeight;
+
+                // Aggressive initial scroll
+                const quickScroll = Math.max(
+                  0,
+                  scrollOffset +
+                    (itemBottom -
+                      (visibleBottom - POPUP_HEIGHT - EXTRA_BOTTOM_SPACE)),
+                );
+
+                // Immediate aggressive scroll
+                scrollViewRef.current?.scrollTo({
+                  y: quickScroll,
+                  animated: false,
+                });
+
+                // Delayed final adjustment
+                setTimeout(() => {
+                  ensureItemVisible(selectedItem, keyboardHeight, screenHeight);
+                }, SCROLL_ADJUSTMENT_DELAY);
+              },
+            );
+          }
+        } else {
+          ensureItemVisible(selectedItem, keyboardHeight, screenHeight);
+        }
       } else {
-        // Android: Store current scroll position and handle visibility
+        // Android: Keep existing behavior
         const currentScrollY = scrollOffset;
         if (!lastMeasuredItemPosition.current?.originalScrollY) {
           lastMeasuredItemPosition.current = {
@@ -202,6 +389,7 @@ const App = () => {
     };
 
     const keyboardWillHide = () => {
+      setIsKeyboardVisible(false);
       if (!selectedItem || !scrollViewRef.current) return;
 
       if (Platform.OS === 'ios') {
@@ -211,40 +399,168 @@ const App = () => {
             y: lastMeasuredItemPosition.current.originalScrollY,
             animated: true,
           });
+
+          // Update popup position after scroll
+          setTimeout(() => {
+            updatePopupPosition(selectedItem);
+          }, 300);
         }
       } else {
-        // Android: Restore original scroll position
+        // Android: Keep existing behavior
         if (lastMeasuredItemPosition.current?.originalScrollY !== undefined) {
           scrollViewRef.current.scrollTo({
             y: lastMeasuredItemPosition.current.originalScrollY,
             animated: false,
           });
+
+          // Update popup position after scroll
+          setTimeout(() => {
+            updatePopupPosition(selectedItem);
+          }, 50);
         }
       }
+    };
 
-      // Update popup position after scroll
-      setTimeout(
-        () => {
-          updatePopupPosition(selectedItem);
-        },
-        Platform.OS === 'ios' ? 300 : 50,
+    const keyboardDidShow = (e: KeyboardEvent) => {
+      setIsKeyboardVisible(true);
+      if (!selectedItem || !scrollViewRef.current) return;
+
+      if (Platform.OS === 'ios') {
+        const keyboardHeight = e.endCoordinates.height;
+        const screenHeight = SCREEN_HEIGHT;
+        const isLastItem = selectedItem === TEST_ITEMS.length;
+
+        if (isLastItem) {
+          // Pre-emptive scroll for last item
+          const itemRef = itemRefs.current[selectedItem];
+          if (itemRef) {
+            itemRef.measure(
+              (
+                x: number,
+                y: number,
+                width: number,
+                height: number,
+                pageX: number,
+                pageY: number,
+              ) => {
+                const itemBottom = pageY + height;
+                const visibleBottom = screenHeight - keyboardHeight;
+
+                // Aggressive initial scroll
+                const quickScroll = Math.max(
+                  0,
+                  scrollOffset +
+                    (itemBottom -
+                      (visibleBottom - POPUP_HEIGHT - EXTRA_BOTTOM_SPACE)),
+                );
+
+                // Immediate aggressive scroll
+                scrollViewRef.current?.scrollTo({
+                  y: quickScroll,
+                  animated: false,
+                });
+
+                // Delayed final adjustment
+                setTimeout(() => {
+                  ensureItemVisible(selectedItem, keyboardHeight, screenHeight);
+                }, SCROLL_ADJUSTMENT_DELAY);
+              },
+            );
+          }
+        } else {
+          ensureItemVisible(selectedItem, keyboardHeight, screenHeight);
+        }
+      } else {
+        // Android: Keep existing behavior
+        const currentScrollY = scrollOffset;
+        if (!lastMeasuredItemPosition.current?.originalScrollY) {
+          lastMeasuredItemPosition.current = {
+            ...lastMeasuredItemPosition.current!,
+            originalScrollY: currentScrollY,
+          };
+        }
+
+        const keyboardHeight = e.endCoordinates.height;
+        const screenHeight = e.endCoordinates.screenY;
+        ensureItemVisible(selectedItem, keyboardHeight, screenHeight);
+      }
+    };
+
+    const keyboardDidHide = () => {
+      setIsKeyboardVisible(false);
+      if (!selectedItem || !scrollViewRef.current) return;
+
+      if (Platform.OS === 'ios') {
+        // iOS: Restore scroll position smoothly
+        if (lastMeasuredItemPosition.current?.originalScrollY !== undefined) {
+          scrollViewRef.current.scrollTo({
+            y: lastMeasuredItemPosition.current.originalScrollY,
+            animated: true,
+          });
+
+          // Update popup position after scroll
+          setTimeout(() => {
+            updatePopupPosition(selectedItem);
+          }, 300);
+        }
+      } else {
+        // Android: Keep existing behavior
+        if (lastMeasuredItemPosition.current?.originalScrollY !== undefined) {
+          scrollViewRef.current.scrollTo({
+            y: lastMeasuredItemPosition.current.originalScrollY,
+            animated: false,
+          });
+
+          // Update popup position after scroll
+          setTimeout(() => {
+            updatePopupPosition(selectedItem);
+          }, 50);
+        }
+      }
+    };
+
+    if (Platform.OS === 'ios') {
+      const showSubscription = Keyboard.addListener(
+        'keyboardWillShow',
+        keyboardWillShow,
       );
-    };
-
-    const keyboardShow = Keyboard.addListener(
-      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
-      keyboardWillShow,
-    );
-    const keyboardHide = Keyboard.addListener(
-      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
-      keyboardWillHide,
-    );
-
-    return () => {
-      keyboardShow.remove();
-      keyboardHide.remove();
-    };
+      const hideSubscription = Keyboard.addListener(
+        'keyboardWillHide',
+        keyboardWillHide,
+      );
+      return () => {
+        showSubscription.remove();
+        hideSubscription.remove();
+      };
+    } else {
+      const showSubscription = Keyboard.addListener(
+        'keyboardDidShow',
+        keyboardDidShow,
+      );
+      const hideSubscription = Keyboard.addListener(
+        'keyboardDidHide',
+        keyboardDidHide,
+      );
+      return () => {
+        showSubscription.remove();
+        hideSubscription.remove();
+      };
+    }
   }, [selectedItem, updatePopupPosition, ensureItemVisible, scrollOffset]);
+
+  // Calculate dynamic contentContainerStyle
+  const scrollViewContentStyle = useMemo(() => {
+    const baseStyle = {};
+
+    if (Platform.OS === 'ios' && isKeyboardVisible) {
+      return {
+        ...baseStyle,
+        paddingBottom: EXTRA_BOTTOM_SPACE + POPUP_HEIGHT + 100,
+      };
+    }
+
+    return baseStyle;
+  }, [isKeyboardVisible]);
 
   const handleItemPress = useCallback(
     (id: number) => {
@@ -340,6 +656,7 @@ const App = () => {
         onScroll={handleScroll}
         scrollEventThrottle={16}
         onLayout={handleScrollViewLayout}
+        contentContainerStyle={scrollViewContentStyle}
       >
         {items.map(item => (
           <TouchableOpacity
