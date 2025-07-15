@@ -21,11 +21,13 @@ export const bedManagementStyles = StyleSheet.create({
   },
   bedGrid: {
     flex: 1,
+    minWidth: '100%',
   },
   bedRow: {
     flexDirection: 'row',
     marginBottom: 12,
     justifyContent: 'flex-start',
+    minWidth: '100%',
   },
   bedButton: {
     width: 80,
@@ -121,5 +123,9 @@ export const bedManagementStyles = StyleSheet.create({
     width: 80,
     height: 60,
     marginRight: 12,
+  },
+  scrollableGrid: {
+    flex: 1,
+    backgroundColor: 'transparent',
   },
 });
