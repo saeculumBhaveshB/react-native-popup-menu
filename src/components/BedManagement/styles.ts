@@ -37,11 +37,12 @@ export const bedManagementStyles = StyleSheet.create({
     borderWidth: 1,
     position: 'relative',
   },
-  bedButtonAvailable: {
+  bedButtonOccupied: {
     backgroundColor: '#90EE90', // Light green for available
     borderColor: '#7FBF7F', // Slightly darker green border
   },
-  bedButtonOccupied: {
+
+  bedButtonAvailable: {
     backgroundColor: '#D3D3D3', // Light gray for occupied
     borderColor: '#B0B0B0', // Slightly darker gray border
   },
