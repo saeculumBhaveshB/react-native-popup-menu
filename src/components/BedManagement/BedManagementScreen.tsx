@@ -99,7 +99,7 @@ const mockApiResponse: BedManagementResponse = {
     resourceVersion: '2.0',
   },
   totalBeds: 9,
-  occupiedBeds: 1,
+  occupiedBeds: 0,
   bedLayouts: [
     {
       rowNumber: 1,
@@ -107,7 +107,7 @@ const mockApiResponse: BedManagementResponse = {
       bedNumber: 'E1',
       bedId: 1,
       bedUuid: 'cc318f30-6414-4cb7-883d-de409a344175',
-      status: 'Occupied',
+      status: 'AVAILABLE',
       location: 'Emergency Ward',
       bedType: null,
       patients: [],
@@ -266,6 +266,45 @@ const mockApiResponse: BedManagementResponse = {
       bedTagMaps: [],
       resourceVersion: '1.8',
     },
+    {
+      rowNumber: 2,
+      columnNumber: 3,
+      bedNumber: null,
+      bedId: null,
+      bedUuid: null,
+      status: null,
+      location: 'Emergency Ward',
+      bedType: null,
+      patients: [],
+      bedTagMaps: null,
+      resourceVersion: '1.8',
+    },
+    {
+      rowNumber: 3,
+      columnNumber: 2,
+      bedNumber: null,
+      bedId: null,
+      bedUuid: null,
+      status: null,
+      location: 'Emergency Ward',
+      bedType: null,
+      patients: [],
+      bedTagMaps: null,
+      resourceVersion: '1.8',
+    },
+    {
+      rowNumber: 4,
+      columnNumber: 2,
+      bedNumber: null,
+      bedId: null,
+      bedUuid: null,
+      status: null,
+      location: 'Emergency Ward',
+      bedType: null,
+      patients: [],
+      bedTagMaps: null,
+      resourceVersion: '1.8',
+    },
   ],
   resourceVersion: '1.8',
 };
@@ -340,7 +379,7 @@ export const BedManagementScreen: React.FC = () => {
   }
 
   const availableBeds = bedData.bedLayouts.filter(
-    bed => bed.status === 'AVAILABLE',
+    bed => bed.bedNumber && bed.status === 'AVAILABLE',
   ).length;
 
   return (

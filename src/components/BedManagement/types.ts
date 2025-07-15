@@ -9,14 +9,14 @@ export interface BedType {
 export interface BedLayout {
   rowNumber: number;
   columnNumber: number;
-  bedNumber: string;
-  bedId: number;
-  bedUuid: string;
-  status: 'AVAILABLE' | 'Occupied';
+  bedNumber: string | null;
+  bedId: number | null;
+  bedUuid: string | null;
+  status: 'AVAILABLE' | 'Occupied' | null;
   location: string;
   bedType: BedType | null;
   patients: any[];
-  bedTagMaps: any[];
+  bedTagMaps: any[] | null;
   resourceVersion: string;
 }
 

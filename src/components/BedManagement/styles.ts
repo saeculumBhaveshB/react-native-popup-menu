@@ -117,4 +117,9 @@ export const bedManagementStyles = StyleSheet.create({
     color: '#666',
     marginTop: 2,
   },
+  emptySpace: {
+    width: 80,
+    height: 60,
+    marginRight: 12,
+  },
 });

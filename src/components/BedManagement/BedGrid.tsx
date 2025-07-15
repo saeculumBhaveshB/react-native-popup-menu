@@ -15,41 +15,59 @@ export const BedGrid: React.FC<BedGridProps> = ({
   selectedBed,
   onBedPress,
 }) => {
-  // Group beds by row number
-  const bedsByRow = bedLayouts.reduce((acc, bed) => {
-    const row = bed.rowNumber;
-    if (!acc[row]) {
-      acc[row] = [];
+  // Find the maximum row and column numbers to create the grid
+  const maxRow = Math.max(...bedLayouts.map(bed => bed.rowNumber));
+  const maxColumn = Math.max(...bedLayouts.map(bed => bed.columnNumber));
+
+  // Create a grid matrix
+  const gridMatrix: (BedLayout | null)[][] = [];
+
+  // Initialize the grid with null values
+  for (let row = 1; row <= maxRow; row++) {
+    gridMatrix[row] = [];
+    for (let col = 1; col <= maxColumn; col++) {
+      gridMatrix[row][col] = null;
     }
-    acc[row].push(bed);
-    return acc;
-  }, {} as Record<number, BedLayout[]>);
+  }
 
-  // Sort beds within each row by column number
-  Object.keys(bedsByRow).forEach(rowKey => {
-    const row = parseInt(rowKey);
-    bedsByRow[row].sort((a, b) => a.columnNumber - b.columnNumber);
+  // Fill the grid with bed data
+  bedLayouts.forEach(bed => {
+    gridMatrix[bed.rowNumber][bed.columnNumber] = bed;
   });
-
-  // Get sorted row numbers
-  const rowNumbers = Object.keys(bedsByRow)
-    .map(Number)
-    .sort((a, b) => a - b);
 
   return (
     <View style={bedManagementStyles.bedGrid}>
-      {rowNumbers.map(rowNumber => (
-        <View key={rowNumber} style={bedManagementStyles.bedRow}>
-          {bedsByRow[rowNumber].map(bed => (
-            <BedButton
-              key={bed.bedUuid}
-              bed={bed}
-              isSelected={selectedBed?.bedUuid === bed.bedUuid}
-              onPress={onBedPress}
-            />
-          ))}
-        </View>
-      ))}
+      {Array.from({ length: maxRow }, (_, rowIndex) => {
+        const rowNumber = rowIndex + 1;
+        return (
+          <View key={rowNumber} style={bedManagementStyles.bedRow}>
+            {Array.from({ length: maxColumn }, (_, colIndex) => {
+              const columnNumber = colIndex + 1;
+              const bed = gridMatrix[rowNumber][columnNumber];
+
+              if (bed && bed.bedNumber) {
+                // Render bed button for valid beds
+                return (
+                  <BedButton
+                    key={bed.bedUuid || `${rowNumber}-${columnNumber}`}
+                    bed={bed}
+                    isSelected={selectedBed?.bedUuid === bed.bedUuid}
+                    onPress={onBedPress}
+                  />
+                );
+              } else {
+                // Render empty space for null beds or empty positions
+                return (
+                  <View
+                    key={`empty-${rowNumber}-${columnNumber}`}
+                    style={bedManagementStyles.emptySpace}
+                  />
+                );
+              }
+            })}
+          </View>
+        );
+      })}
     </View>
   );
 };

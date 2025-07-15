@@ -8,6 +8,11 @@ export const BedButton: React.FC<BedButtonProps> = ({
   isSelected,
   onPress,
 }) => {
+  // Don't render if bed number is null
+  if (!bed.bedNumber) {
+    return null;
+  }
+
   const getButtonStyle = () => {
     if (isSelected) {
       return [
